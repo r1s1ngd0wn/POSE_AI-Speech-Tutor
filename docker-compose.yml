@@ -1,0 +1,42 @@
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./AI_USAGE.md:/app/AI_USAGE.md:ro
+      - scenario_data:/app/data
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - NODE_ENV=production
+      - CORS_ORIGIN=http://localhost:5173
+      - TRUST_PROXY=1
+      - DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL to the Supabase Postgres connection string}
+      - SCENARIO_DATA_FILE=/app/data/scenario-overrides.json
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
+      - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-flash-latest}
+      # Uncomment for a demo deployment that should include the seeded test login.
+      # - SEED_TEST_ACCOUNT=true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SUPABASE_URL: ${SUPABASE_URL:-}
+        VITE_SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+volumes:
+  scenario_data:
