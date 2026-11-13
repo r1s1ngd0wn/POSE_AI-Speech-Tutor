@@ -245,3 +245,8 @@ documented in `backend/.env.example` and `docs/DUC_SETUP.md`.
 
 Nguyen Anh Khoa and Nguyen Hang Hai Long, group 03, HCMUTE. AI assistance used in this project is
 logged in [AI_USAGE.md](AI_USAGE.md).
+
+**Credits for the base code.** The tutor was built on InterviewAI, an earlier project by the same team
+together with Tran Huu Duc. Duc wrote the Supabase sign-in and roles, admin pages, practice plans and AI
+request logging that the tutor still reuses. The commit history of that earlier work is squashed into
+this repository's first commit.
