@@ -1,0 +1,29 @@
+{
+  "version": "tutor-1.0-provisional",
+  "note": "Provisional teaching defaults from SRS v0.3 section 6.3. A teacher reviews these before the pilot. STT confidence is a rough intelligibility signal, not a clinical pronunciation assessment.",
+  "weights": { "clarity": 0.3, "accuracy": 0.3, "completeness": 0.2, "participation": 0.2 },
+  "stars": { "three": 4, "two": 2.5 },
+  "applicability": {
+    "listen_repeat": ["clarity", "accuracy", "participation"],
+    "name_picture": ["clarity", "accuracy", "participation"],
+    "answer_question": ["clarity", "accuracy", "completeness", "participation"],
+    "picture_choice": ["accuracy", "participation"]
+  },
+  "clarity": {
+    "minBand": { "B": [0.85, 0.7, 0.55, 0.4], "A": [0.75, 0.6, 0.45, 0.3] },
+    "note": "Lower bounds for bands 5, 4, 3, 2. Band A (ages 6-7) thresholds are provisional and lower than Band B."
+  },
+  "accuracy": {
+    "minShare": [1, 0.75, 0.5, 0.25],
+    "note": "Lower bounds of matched target-word share for bands 5, 4, 3, 2."
+  },
+  "participation": {
+    "firstAttemptMs": [5000, 10000],
+    "note": "First attempt within 5 s is band 5, within 10 s band 4, later band 3. A second attempt is band 2 and an attempt after a hint is band 1."
+  },
+  "matching": {
+    "fuzzyMinLength": 5,
+    "fuzzyMaxEdits": 1,
+    "ignoredWords": ["a", "an", "the"]
+  }
+}
