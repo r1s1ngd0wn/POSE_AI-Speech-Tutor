@@ -11,6 +11,8 @@ const store = require("../store");
 const { newId } = require("../utils/id");
 const { httpError } = require("../utils/httpError");
 const lessons = require("./tutorLessonService");
+const progressService = require("./tutorProgressService");
+const reportService = require("./tutorReportService");
 const { scoreAttempt, rubricVersion } = require("./tutorScoringService");
 
 const MAX_CHILDREN = 5;
@@ -52,6 +54,8 @@ async function deleteChild(parentId, childId) {
   const sessions = await store.tutorSessions.valuesWhere("childId", childId);
   for (const session of sessions) await store.tutorSessions.delete(session.id);
   await store.tutorChildren.delete(childId);
+  await progressService.deleteProgress(childId);
+  await reportService.deleteReport(childId);
   return { deleted: true, sessionsDeleted: sessions.length };
 }
 
@@ -113,7 +117,9 @@ async function getOwnedSession(parentId, sessionId) {
 async function startSession(parentId, { childId, topicId } = {}, deps = {}) {
   const child = await getOwnedChild(parentId, childId);
   if (!lessons.topicIds.includes(topicId)) throw httpError(400, `Unknown topic: ${topicId}`);
-  const lesson = await lessons.generateLesson({ topicId, ageBand: child.ageBand }, deps);
+  // The learner model chooses the difficulty level and the words to practise; the model only writes the lesson.
+  const progress = await progressService.getProgress(child.id);
+  const lesson = await lessons.generateLesson({ topicId, ageBand: child.ageBand, level: progress.level, practiceWords: progressService.practiceWordsFor(progress) }, deps);
   const session = {
     id: newId("tsess"),
     parentId,
@@ -121,6 +127,7 @@ async function startSession(parentId, { childId, topicId } = {}, deps = {}) {
     topicId,
     topicLabel: lesson.topicLabel,
     ageBand: child.ageBand,
+    level: progress.level,
     status: "active",
     story: lesson.story,
     // The full lesson including accepted answers stays on the server; see the file comment.
@@ -200,6 +207,21 @@ async function submitAttempt(parentId, sessionId, { itemId, response } = {}) {
   }
   await store.tutorSessions.set(session.id, session);
 
+  // Word progress updates after every scored attempt; rewards and the level are settled when the lesson is completed.
+  const at = session.attempts[session.attempts.length - 1].at;
+  let progress = progressService.applyAttempt(await progressService.getProgress(session.childId), { item, result, mode: clean.mode, at });
+  let rewards = null;
+  if (session.status === "completed") {
+    const done = progressService.completeSession(progress, session, at);
+    progress = done.progress;
+    rewards = {
+      newStickers: done.newStickers.map((id) => ({ id, label: progressService.rules.stickers[id] })),
+      streak: progress.streak.current,
+      level: progress.level,
+    };
+  }
+  await progressService.saveProgress(progress);
+
   const stars = result.completed ? result.stars : null;
   return {
     result: {
@@ -210,8 +232,14 @@ async function submitAttempt(parentId, sessionId, { itemId, response } = {}) {
     feedback: MESSAGES[stars ?? "abandoned"],
     reveal: revealFor(item),
     done: session.status === "completed",
+    rewards,
     session: publicSession(session),
   };
+}
+
+async function getChildProgress(parentId, childId) {
+  const child = await getOwnedChild(parentId, childId);
+  return { child: { id: child.id, nickname: child.nickname, ageBand: child.ageBand }, progress: progressService.viewOf(await progressService.getProgress(child.id)) };
 }
 
 // Ends a session early (the child stopped). Activities not reached get no stars.
@@ -227,6 +255,6 @@ async function finishSession(parentId, sessionId) {
 
 module.exports = {
   createChild, listChildren, getOwnedChild, deleteChild,
-  startSession, getSession, submitAttempt, finishSession,
+  startSession, getSession, submitAttempt, finishSession, getChildProgress,
   MAX_CHILDREN,
 };

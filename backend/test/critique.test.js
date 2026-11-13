@@ -68,7 +68,7 @@ test("render() fills placeholders and rejects unknown prompts and missing values
 });
 
 test("the merged registry still serves Long's prompts by name, with their versions", () => {
-  assert.deepEqual(Object.keys(prompts.versions).sort(), ["coach", "critique", "debrief", "debrief-rag", "reaction", "tutor-lesson"]);
+  assert.deepEqual(Object.keys(prompts.versions).sort(), ["coach", "critique", "debrief", "debrief-rag", "reaction", "tutor-lesson", "tutor-report"]);
   assert.equal(prompts.versions.coach, "v1");
   assert.equal(prompts.versions.debrief, "v1");
   assert.equal(prompts.versions["debrief-rag"], "v1");

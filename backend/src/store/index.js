@@ -11,4 +11,6 @@ module.exports = {
   // AI Speaking Tutor
   tutorChildren: table("tutor_children", "id"),
   tutorSessions: table("tutor_sessions", "id"),
+  tutorProgress: table("tutor_progress", "child_id"),
+  tutorReports: table("tutor_reports", "child_id"),
 };

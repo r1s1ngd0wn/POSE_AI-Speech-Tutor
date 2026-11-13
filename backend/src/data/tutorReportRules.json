@@ -1,0 +1,22 @@
+{
+  "version": "report-1.0-provisional",
+  "note": "Provisional defaults for the comprehensive learner report. Every figure in a report is computed by code from stored scores; the language model only phrases them, and its text is rejected unless it is supported by those figures. A teacher should review these thresholds before the pilot.",
+  "minCompletedSessions": 3,
+  "minScoredActivities": 10,
+  "minSamplesPerCriterion": 5,
+  "recentActivities": 10,
+  "trendDelta": 0.25,
+  "trendMinSessions": 4,
+  "trendWindow": 3,
+  "wordsListed": 8,
+  "limits": { "summaryWords": 90, "itemWords": 30, "maxItems": 3 },
+  "disclaimer": "This is a summary of practice in this app. It is not a test, a certificate or an assessment of English level, and it does not diagnose anything. Results depend on the microphone, the room and the day.",
+  "bannedPatterns": [
+    "diagnos", "disorder", "dyslex", "autis", "adhd", "delay", "impair", "disabilit",
+    "\\bCEFR\\b", "\\bIELTS\\b", "\\bTOEFL\\b", "\\bA1\\b", "\\bA2\\b", "\\bIQ\\b",
+    "\\bfluent\\b", "\\bnative\\b", "\\bgifted\\b", "\\btalented\\b", "\\bbehind\\b",
+    "other (children|kids|students)", "(compared|relative) (to|with) (other|most|typical|average|children|kids|students|peers|age|grade|class)", "average child", "\\bpeers?\\b",
+    "\\b(buy|purchase|subscribe|doctor|therapist|specialist|medical|pay|upgrade)\\b",
+    "\\b(school|classroom|class|teachers?)\\b", "https?:", "www\\.", "@"
+  ]
+}

@@ -3,6 +3,7 @@ const requireAuth = require("../middleware/requireAuth");
 const { rateLimit } = require("../middleware/security");
 const tutor = require("../services/tutorSessionService");
 const lessons = require("../services/tutorLessonService");
+const reportService = require("../services/tutorReportService");
 const topics = require("../data/tutorTopics.json").topics;
 
 const router = express.Router();
@@ -18,6 +19,8 @@ const handle = (fn) => async (req, res, next) => {
 
 // Starting a session calls the language model, so it is limited more tightly than the other calls.
 const startLimit = rateLimit({ windowMs: 60 * 1000, max: 10 });
+// A report calls the language model once, so it is limited too.
+const reportLimit = rateLimit({ windowMs: 60 * 1000, max: 5 });
 
 router.get("/topics", (req, res) => {
   res.json({ topics: lessons.topicIds.map((id) => ({ id, label: topics[id].label })) });
@@ -29,6 +32,18 @@ router.get("/children", handle(async (req, res) => {
 
 router.post("/children", handle(async (req, res) => {
   res.status(201).json({ child: await tutor.createChild(req.user.id, req.body) });
+}));
+
+router.get("/children/:id/progress", handle(async (req, res) => {
+  res.json(await tutor.getChildProgress(req.user.id, req.params.id));
+}));
+
+router.post("/children/:id/report", reportLimit, handle(async (req, res) => {
+  res.status(201).json({ report: await reportService.generateReport(req.user.id, req.params.id) });
+}));
+
+router.get("/children/:id/report", handle(async (req, res) => {
+  res.json({ report: await reportService.getReport(req.user.id, req.params.id) });
 }));
 
 router.delete("/children/:id", handle(async (req, res) => {
