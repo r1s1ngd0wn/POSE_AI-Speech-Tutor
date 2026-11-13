@@ -24,6 +24,19 @@ const LIMITS = {
   A: { say: 5, question: 7, answer: 4, rules: "a child aged 6 to 7 who knows only a few English words. Use the very simplest words and the shortest sentences." },
   B: { say: 8, question: 12, answer: 7, rules: "a child aged 8 to 10 who knows some basic English. Use simple words and short sentences." },
 };
+// Difficulty level 1-3 within an age band: level 1 asks for slightly shorter sentences, level 3 slightly longer.
+const LEVEL_DELTA = { 1: -1, 2: 0, 3: 1 };
+const LEVEL_TEXT = {
+  1: "Difficulty: easier than usual. Use the shortest, most familiar words.",
+  2: "Difficulty: standard.",
+  3: "Difficulty: a little harder than usual. Sentences may be slightly longer, but keep every word on the allowed lists.",
+};
+function limitsFor(ageBand, level = 2) {
+  const base = LIMITS[ageBand];
+  const delta = LEVEL_DELTA[level] ?? 0;
+  const adjust = (n) => Math.max(2, n + delta);
+  return { say: adjust(base.say), question: adjust(base.question), answer: adjust(base.answer), rules: `${base.rules} ${LEVEL_TEXT[level] ?? LEVEL_TEXT[2]}` };
+}
 const STORY_MAX_WORDS = 20;
 const TEXT_OK = /^[A-Za-z' ?.!,:]+$/;
 const PERSONAL = /\b(your name|my name|name is|address|phone|email|school|live|lives|home|how old|years old|birthday|password|mom|mum|mother|dad|father|where are you from|surname)\b/i;
@@ -47,7 +60,8 @@ const topicVocab = (topicId) => new Set(tokens(topicsData.topics[topicId].vocab)
 const KNOWN_WORDS = new Set([...BASE_WORDS, ...Object.keys(topicsData.topics).flatMap((id) => [...topicVocab(id)])]);
 
 function allowedWords({ topicId, practiceWords, character }) {
-  const allowed = new Set([...BASE_WORDS, ...topicVocab(topicId)]);
+  // The category names are needed to ask open questions in any topic ("What color do you like?").
+  const allowed = new Set([...BASE_WORDS, ...topicVocab(topicId), ...Object.keys(topicsData.categories)]);
   for (const w of practiceWords) if (KNOWN_WORDS.has(w)) allowed.add(w);
   if (character) allowed.add(character.toLowerCase());
   return allowed;
@@ -90,8 +104,8 @@ function wordChoices(words) {
 
 // Returns { item } for a usable item or { reasons } for a rejected one.
 function normaliseItem(raw, ctx) {
-  const { ageBand, topic, allowed } = ctx;
-  const limits = LIMITS[ageBand];
+  const { ageBand, level, topic, allowed } = ctx;
+  const limits = limitsFor(ageBand, level);
   if (!raw || typeof raw !== "object") return { reasons: ["item is not an object"] };
   const type = raw.activityType;
   if (!ACTIVITY_TYPES.includes(type)) return { reasons: [`unknown activity type: ${type}`] };
@@ -238,7 +252,7 @@ function parseModelJson(text) {
 
 function fallbackItems(topicId, ageBand) {
   const topic = topicsData.topics[topicId];
-  const ctx = { ageBand, topic, allowed: allowedWords({ topicId, practiceWords: [], character: topic.fallback.story.character }) };
+  const ctx = { ageBand, level: 3, topic, allowed: allowedWords({ topicId, practiceWords: [], character: topic.fallback.story.character }) };
   return topic.fallback.items.map((raw) => {
     const result = normaliseItem(raw, ctx);
     if (!result.item) throw new Error(`fallback item for ${topicId} is invalid: ${result.reasons.join("; ")}`);
@@ -246,9 +260,9 @@ function fallbackItems(topicId, ageBand) {
   });
 }
 
-function promptFor({ topicId, ageBand, practiceWords, mix }) {
+function promptFor({ topicId, ageBand, level, practiceWords, mix }) {
   const topic = topicsData.topics[topicId];
-  const limits = LIMITS[ageBand];
+  const limits = limitsFor(ageBand, level);
   return prompts.render("tutor-lesson", {
     age_rules: limits.rules,
     topic_label: topic.label,
@@ -271,20 +285,21 @@ function cleanRequest(request = {}) {
   const ageBand = request.ageBand === "A" ? "A" : "B";
   const count = Math.min(8, Math.max(3, Number.isInteger(request.count) ? request.count : 5));
   const practiceWords = [...new Set((Array.isArray(request.practiceWords) ? request.practiceWords : []).flatMap((w) => tokens(String(w)).slice(0, 1)))].slice(0, 8);
-  return { topicId, ageBand, count, practiceWords };
+  const level = [1, 2, 3].includes(request.level) ? request.level : 2;
+  return { topicId, ageBand, level, count, practiceWords };
 }
 
 // deps.llm({ system, user, promptName, promptVersion }) -> { text, model, usage }
 async function generateLesson(request, deps = {}) {
-  const { topicId, ageBand, count, practiceWords } = cleanRequest(request);
+  const { topicId, ageBand, level, count, practiceWords } = cleanRequest(request);
   const llm = deps.llm ?? (tutorLlm.status().enabled ? tutorLlm.complete : null);
   const topic = topicsData.topics[topicId];
   const mix = mixFor(count);
-  const meta = { promptVersion: null, model: null, usage: null, aiItems: 0, fallbackItems: 0, rejected: [], llmError: null };
+  const meta = { level, practiceWords, promptVersion: null, model: null, usage: null, aiItems: 0, fallbackItems: 0, rejected: [], llmError: null };
 
   let raw = null;
   if (llm) {
-    const prompt = promptFor({ topicId, ageBand, practiceWords, mix });
+    const prompt = promptFor({ topicId, ageBand, level, practiceWords, mix });
     meta.promptVersion = `${prompt.name}.v${prompt.version}`;
     try {
       const out = await llm({ system: prompt.text, user: "Write the lesson now.", promptName: prompt.name, promptVersion: `v${prompt.version}` });
@@ -304,7 +319,7 @@ async function generateLesson(request, deps = {}) {
   const story = storyResult.story;
 
   const allowed = allowedWords({ topicId, practiceWords, character: story.character });
-  const ctx = { ageBand, topic, allowed };
+  const ctx = { ageBand, level, topic, allowed };
   const modelItems = [];
   const seen = new Set();
   (Array.isArray(raw?.items) ? raw.items : []).slice(0, count * 2).forEach((rawItem, index) => {
@@ -343,4 +358,4 @@ async function generateLesson(request, deps = {}) {
   };
 }
 
-module.exports = { generateLesson, normaliseItem, normaliseStory, STORY_WORDS, allowedWords, mixFor, fallbackItems, LIMITS, topicIds: Object.keys(topicsData.topics) };
+module.exports = { generateLesson, normaliseItem, normaliseStory, STORY_WORDS, limitsFor, allowedWords, mixFor, fallbackItems, LIMITS, topicIds: Object.keys(topicsData.topics) };

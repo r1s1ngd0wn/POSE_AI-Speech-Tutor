@@ -175,12 +175,15 @@ function scoreAttempt(item, response, options = {}) {
     const correct = [].concat(item.correctChoiceId).includes(response.choiceId);
     bands.accuracy = correct ? 5 : 1;
     inputs.accuracy = { correct };
+    // Which word a picture choice tested, for word progress (only when the item is about one word).
+    if (typeof item.correctChoiceId === "string") inputs.words = correct ? { matched: [item.correctChoiceId], missed: [] } : { matched: [], missed: [item.correctChoiceId] };
   } else {
     const spoken = tokens(response.transcript);
     const evaluation = bestEvaluation(item, spoken);
     inputs.matchedAnswer = evaluation.answer;
     bands.accuracy = accuracyBand(evaluation.share);
     inputs.accuracy = { share: round(evaluation.share), matched: evaluation.matches.filter((m) => m.spoken).length, targets: evaluation.matches.length };
+    inputs.words = { matched: evaluation.matches.filter((m) => m.spoken).map((m) => m.target), missed: evaluation.matches.filter((m) => !m.spoken).map((m) => m.target) };
     if (applicable.has("completeness")) {
       bands.completeness = evaluation.completeness;
       inputs.completeness = { missingWords: evaluation.missingWords, missingTargets: evaluation.missingTargets };

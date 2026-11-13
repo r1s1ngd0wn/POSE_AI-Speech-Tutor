@@ -1,0 +1,24 @@
+{
+  "version": "progress-1.0-provisional",
+  "note": "Provisional defaults for word mastery, difficulty levels, streaks and stickers. A teacher should review them before the pilot. Everything here is applied by code; the language model never decides mastery or levels.",
+  "utcOffsetMinutes": 420,
+  "boxIntervalsDays": [0, 1, 3, 7, 14],
+  "masteredBox": 4,
+  "pictureSuccessMaxBox": 2,
+  "level": { "min": 1, "max": 3, "upAvgStars": 2.6, "upSessions": 3, "downAvgStars": 1.6, "downSessions": 2, "minScoredActivities": 3 },
+  "practiceWordsPerLesson": 5,
+  "recentSessionsKept": 10,
+  "stickers": {
+    "first_lesson": "First lesson done",
+    "perfect_lesson": "Perfect lesson: three stars every time",
+    "words_5": "Five words learned",
+    "words_10": "Ten words learned",
+    "streak_3": "Three days in a row",
+    "streak_7": "A whole week in a row",
+    "explorer_animals": "Animal explorer",
+    "explorer_colors": "Color explorer",
+    "explorer_food": "Food explorer",
+    "explorer_nature": "Nature explorer",
+    "explorer_space": "Space explorer"
+  }
+}

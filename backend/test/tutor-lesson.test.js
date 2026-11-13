@@ -273,3 +273,10 @@ test("story narration may use the topic name and -s forms, but still not unknown
   const bad = lessons.normaliseStory({ character: "Zuzu", intro: "Zuzu is a soldier. Zuzu loves nature." }, "nature", "B");
   assert.match(bad.reasons[0], /soldier/);
 });
+
+test("open questions can name their category in any topic", async () => {
+  const lesson = { story: goodLesson.story, items: [{ activityType: "answer_question", prompt: "What color do you like?", answerCategory: "color", answerTemplate: "I like {w}" }] };
+  const result = await lessons.generateLesson({ topicId: "nature", ageBand: "B" }, { llm: llmReturning(lesson) });
+  assert.equal(result.meta.aiItems, 1);
+  assert.equal(result.items.find((i) => i.source === "ai").prompt, "What color do you like?");
+});
