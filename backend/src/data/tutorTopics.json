@@ -1,0 +1,87 @@
+{
+  "note": "Topic menu the child chooses from (the child never types a topic). vocab is the extra words allowed for that topic. categories drive open questions: the model names a category and a template and code expands the accepted answers. fallback is a vetted lesson used whenever generated content is missing or fails validation.",
+  "blockedCharacterNames": ["pikachu", "mario", "luigi", "mickey", "minnie", "elsa", "anna", "peppa", "spiderman", "batman", "superman", "simba", "nemo", "dora", "elmo", "shrek", "sonic", "zelda"],
+  "categories": {
+    "animal": ["cat", "dog", "bird", "fish", "cow", "horse", "duck", "pig", "rabbit", "lion", "monkey", "elephant", "tiger", "frog"],
+    "color": ["red", "blue", "yellow", "green", "orange", "purple", "pink", "black", "white", "brown"],
+    "food": ["apple", "banana", "milk", "bread", "egg", "rice", "cake", "water", "juice", "cheese", "soup"],
+    "sky": ["sun", "moon", "star", "cloud", "bird"]
+  },
+  "topics": {
+    "animals": {
+      "label": "Animals",
+      "vocab": "cat cats dog dogs bird birds fish cow cows horse horses duck ducks pig pigs rabbit rabbits lion lions monkey monkeys elephant elephants tiger tigers frog frogs animal animals pet pets farm tail ears eyes legs wings milk egg eggs fur zoo baby soft",
+      "pictures": ["cat", "dog", "bird", "fish", "cow", "lion", "rabbit", "duck"],
+      "fallback": {
+        "story": { "character": "Momo", "intro": "Momo is a little dragon. Momo likes animals." },
+        "items": [
+          { "activityType": "listen_repeat", "say": "I see a cat" },
+          { "activityType": "name_picture", "pictureKey": "cat" },
+          { "activityType": "name_picture", "pictureKey": "dog" },
+          { "activityType": "answer_question", "prompt": "Do you like dogs?", "acceptedAnswers": [{ "text": "Yes I do", "targetWords": ["yes"] }, { "text": "No I do not", "targetWords": ["no"] }] },
+          { "activityType": "answer_question", "prompt": "What animal do you like?", "answerCategory": "animal", "answerTemplate": "I like {w}" }
+        ]
+      }
+    },
+    "colors": {
+      "label": "Colors",
+      "vocab": "red blue yellow green orange purple pink black white brown color colors sun sky grass apple banana flower",
+      "pictures": ["red", "blue", "yellow", "green", "orange", "purple"],
+      "fallback": {
+        "story": { "character": "Pip", "intro": "Pip is a small robot. Pip likes colors." },
+        "items": [
+          { "activityType": "listen_repeat", "say": "The sun is yellow" },
+          { "activityType": "name_picture", "pictureKey": "red" },
+          { "activityType": "name_picture", "pictureKey": "blue" },
+          { "activityType": "answer_question", "prompt": "Is the sky blue?", "acceptedAnswers": [{ "text": "Yes it is", "targetWords": ["yes"] }] },
+          { "activityType": "answer_question", "prompt": "What color do you like?", "answerCategory": "color", "answerTemplate": "I like {w}" }
+        ]
+      }
+    },
+    "food": {
+      "label": "Food",
+      "vocab": "apple apples banana bananas milk bread egg eggs rice cake water juice cheese soup food fruit hungry yummy sweet breakfast lunch dinner orange white",
+      "pictures": ["apple", "banana", "milk", "bread", "egg", "cake"],
+      "fallback": {
+        "story": { "character": "Bao", "intro": "Bao is a happy bear. Bao likes food." },
+        "items": [
+          { "activityType": "listen_repeat", "say": "I like apples" },
+          { "activityType": "name_picture", "pictureKey": "apple" },
+          { "activityType": "name_picture", "pictureKey": "banana" },
+          { "activityType": "answer_question", "prompt": "Is milk white?", "acceptedAnswers": [{ "text": "Yes it is", "targetWords": ["yes"] }] },
+          { "activityType": "answer_question", "prompt": "What food do you like?", "answerCategory": "food", "answerTemplate": "I like {w}" }
+        ]
+      }
+    },
+    "nature": {
+      "label": "Nature",
+      "vocab": "tree trees flower flowers sun rain cloud clouds river hill grass leaf leaves sky wind sea water garden snow warm bird green",
+      "pictures": ["tree", "flower", "sun", "rain", "cloud"],
+      "fallback": {
+        "story": { "character": "Lila", "intro": "Lila is a little bird. Lila likes the sun and the rain." },
+        "items": [
+          { "activityType": "listen_repeat", "say": "I see a big tree" },
+          { "activityType": "name_picture", "pictureKey": "tree" },
+          { "activityType": "name_picture", "pictureKey": "flower" },
+          { "activityType": "answer_question", "prompt": "Is the sun hot?", "acceptedAnswers": [{ "text": "Yes it is", "targetWords": ["yes"] }] },
+          { "activityType": "answer_question", "prompt": "What do you see in the sky?", "answerCategory": "sky", "answerTemplate": "I see the {w}" }
+        ]
+      }
+    },
+    "space": {
+      "label": "Space",
+      "vocab": "moon star stars sun earth rocket planet sky night light space spaceship astronaut bright dark round far",
+      "pictures": ["moon", "star", "rocket", "earth"],
+      "fallback": {
+        "story": { "character": "Zed", "intro": "Zed is a little star. Zed likes the night sky." },
+        "items": [
+          { "activityType": "listen_repeat", "say": "I see the moon" },
+          { "activityType": "name_picture", "pictureKey": "moon" },
+          { "activityType": "name_picture", "pictureKey": "rocket" },
+          { "activityType": "answer_question", "prompt": "Is a star bright?", "acceptedAnswers": [{ "text": "Yes it is", "targetWords": ["yes"] }] },
+          { "activityType": "answer_question", "prompt": "What do you see in the sky?", "answerCategory": "sky", "answerTemplate": "I see the {w}" }
+        ]
+      }
+    }
+  }
+}
