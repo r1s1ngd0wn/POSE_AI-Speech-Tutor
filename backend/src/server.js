@@ -57,6 +57,7 @@ app.use("/api/documents", documentRoutes);
 app.use("/api/coach", coachRoutes);
 app.use("/api/speech", require("./routes/speech"));
 app.use("/api/progress", progressRoutes);
+app.use("/api/tutor", require("./routes/tutor"));
 
 app.use((req, res) => {
   res.status(404).json({ error: "not found" });

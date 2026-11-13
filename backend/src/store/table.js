@@ -32,6 +32,10 @@ class MemoryTable {
     return true;
   }
   async entries() { return [...this.data.entries()].map(([key, value]) => [key, structuredClone(value)]); }
+  // Values whose top-level `field` equals `match` (a tutor table's owner lookups).
+  async valuesWhere(field, match) {
+    return (await this.values()).filter((value) => value[field] === match);
+  }
 }
 
 class PostgresTable {
@@ -105,6 +109,13 @@ class PostgresTable {
       [sessionId, String(index), JSON.stringify(critique), questionId]
     );
     return result.rowCount === 1;
+  }
+
+  async valuesWhere(field, match) {
+    if (!this.tableName.startsWith("tutor_")) throw new Error("valuesWhere is only available for tutor tables");
+    if (!/^[A-Za-z]+$/.test(field)) throw new Error("invalid field name");
+    const result = await getPool().query(`SELECT value FROM ${this.tableName} WHERE value->>'${field}' = $1 ORDER BY value->>'createdAt' DESC`, [match]);
+    return result.rows.map((row) => row.value);
   }
 
   async entries() {
