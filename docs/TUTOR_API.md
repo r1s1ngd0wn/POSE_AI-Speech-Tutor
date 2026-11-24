@@ -33,6 +33,11 @@ UPDATE public.profiles SET role = 'teacher' WHERE id = '<the teacher''s auth use
 | `TUTOR_LLM_PROVIDER` | `local` or `openrouter`. Unset means lessons come only from the vetted fallback set |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | When the provider is `openrouter` |
 | `LOCAL_LLM_URL`, `LOCAL_LLM_MODEL` | When the provider is `local` |
+| `TUTOR_STT_PROVIDER` | `xai` or `groq`. Unset means no server-side speech recognition (the browser does it) |
+| `TUTOR_TTS_PROVIDER` | `xai`. Unset means no server-side tutor voice (the browser's own voice) |
+| `XAI_API_KEY`, `GROQ_API_KEY` | Keys for the chosen speech providers. Server only, never in the frontend |
+| `TUTOR_TTS_VOICE` | Tutor voice, default `luna`; `cosmo` is another education voice |
+| `TUTOR_STT_USE_LOGPROB` | `true` lets Groq's rough log-probability confidence count towards the Clarity score (off by default; not calibrated) |
 
 ## 2. Conventions
 
@@ -180,12 +185,54 @@ removes access immediately. There is no audio in this release.
 An item: `{ reviewId, activityType, topic, ageBand, prompt, target, responseMode, transcript, chosenPicture,
 system { stars, bands[], rubricVersion, confidence }, source ("ai" or "fallback"), judged, myJudgment }`.
 
+## 7a. Speech (server side)
+
+Optional. Ask `GET /speech/status` first: `{ stt: { enabled, provider, providesConfidence, maxBytes }, tts: { enabled, provider, voice } }`.
+When a service is off, use the browser's own speech (Web Speech API) and send the transcript with the normal attempts route.
+
+**A spoken answer: `POST /sessions/:id/attempts/audio`** (**consent**). The body is the recording itself with an `audio/*`
+content type (for example `audio/webm` from `MediaRecorder`, at most 3 MB: one short turn is a few tens of kilobytes).
+Everything else is in the query string:
+
+```
+POST /api/tutor/sessions/tsess_…/attempts/audio?itemId=i1&firstAttemptMs=2400&attemptCount=1&hintUsed=false
+Content-Type: audio/webm
+<recording bytes>
+```
+
+The server checks that `itemId` is the current activity **before** sending any audio on, transcribes it, and scores it.
+The reply is the same as for `POST /attempts`, plus `heard`: the text the child was heard to say (show it as the subtitle).
+The recording is never stored. Because the transcript comes from the speech service, the browser cannot make one up.
+
+| Status and `code` | Meaning and what to do |
+|---|---|
+| `422 NO_SPEECH_DETECTED` | Silence or nothing recognised. **The activity is not used up**: ask the child to try again (count it in `attemptCount`) |
+| `502 STT_FAILED` or `SPEECH_UNAVAILABLE` | The service failed or could not be reached. Offer the picture choices (FR-08) or retry |
+| `413 AUDIO_TOO_LARGE`, `415 AUDIO_FORMAT` | Recording too long or not audio |
+| `503 STT_NOT_CONFIGURED` | Speech recognition is off: use the browser's speech |
+
+**Clarity and confidence.** The xAI service returns no confidence, so for those answers the Clarity criterion is simply
+left out and the other weights are renormalised (the scorer already does this). Groq's Whisper only gives a rough
+stand-in that is off by default.
+
+**The tutor's voice: `GET /sessions/:id/speech?line=…`** (**consent**) returns audio bytes (`audio/mpeg`). The server picks
+the words from the session, so only these lines can be spoken:
+
+| `line` | Extra query | Says |
+|---|---|---|
+| `story` | | The story intro |
+| `prompt` | `itemId` of the current or an earlier activity | The activity's prompt |
+| `reveal` | `itemId` of an answered activity | The correct answer (404 if there is no single answer, as for an open question) |
+| `feedback` | `stars=1`, `2`, `3` or `abandoned` | The short encouragement |
+
+The request needs the `Authorization` header, so an `<audio src>` cannot call it directly: `fetch` it and play the blob.
+Younger children (age band A) get a slightly slower voice. Repeated lines are cached on the server, so each line is paid for once.
+Errors: `503 TTS_NOT_CONFIGURED`, `502 TTS_FAILED`.
+
 ## 8. What is not built yet
 
-- **Speech.** The browser must do speech-to-text itself for now (for example the Web Speech API) and send the
-  `transcript`, or use the existing `/api/speech` transcription route inherited from InterviewAI, which was built for
-  adult speech and must be tested with children's voices. Tutor speech (text-to-speech) is also the browser's job for
-  now. A server-side speech service for the tutor is planned.
+- **A chosen speech service.** The server-side speech described in section 7a works, but no provider has been
+  verified for children's voices or data policy yet, so it stays off until a provider is chosen (see below).
 - **Audio retention.** The audio permissions exist, but no audio is stored.
 - **Real artwork.** Pictures are emoji placeholders.
 - **Consent wording.** The text in `backend/src/data/tutorConsent.json` is a draft for review, not legal advice.

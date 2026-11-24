@@ -16,6 +16,7 @@ const reportService = require("./tutorReportService");
 const privacyService = require("./tutorPrivacyService");
 const reviewService = require("./tutorReviewService");
 const { scrubContactDetails } = require("../utils/scrub");
+const speechService = require("./tutorSpeechService");
 const { scoreAttempt, rubricVersion } = require("./tutorScoringService");
 
 const MAX_CHILDREN = 5;
@@ -310,6 +311,47 @@ async function getChildProgress(parentId, childId) {
   return { child: { id: child.id, nickname: child.nickname, ageBand: child.ageBand }, progress: progressService.viewOf(await progressService.getProgress(child.id)) };
 }
 
+// The text of one tutor line, chosen by the server from the session so the browser cannot make the voice
+// service say arbitrary text. line: "story", "prompt" (an activity that has started), "reveal" (the answer of an
+// activity already answered) or "feedback" (with stars 1 to 3 or "abandoned").
+async function speechLine(parentId, sessionId, { line, itemId, stars } = {}) {
+  const session = await getOwnedSession(parentId, sessionId);
+  const ageBand = session.ageBand;
+  if (line === "story") return { text: session.story.intro, ageBand };
+  if (line === "feedback") {
+    const key = stars === "abandoned" ? "abandoned" : Number(stars);
+    if (!MESSAGES[key]) throw httpError(400, "stars must be 1, 2, 3 or abandoned.");
+    return { text: MESSAGES[key], ageBand };
+  }
+  if (line !== "prompt" && line !== "reveal") throw httpError(400, "line must be story, prompt, reveal or feedback.");
+  const index = session.items.findIndex((i) => i.id === itemId);
+  if (index === -1) throw httpError(404, "activity not found");
+  const item = session.items[index];
+  if (line === "prompt") {
+    if (index > session.currentIndex) throw httpError(409, "That activity has not started.");
+    return { text: item.prompt, ageBand };
+  }
+  if (index >= session.currentIndex) throw httpError(409, "That activity has not been answered yet.");
+  const text = revealFor(item);
+  if (!text) throw httpError(404, "there is no single answer to say for that activity");
+  return { text, ageBand };
+}
+
+// A spoken answer: check it is the right activity first (so audio is not sent to the speech service for a
+// request that would be refused), turn the audio into text, then score it like any other attempt. The audio
+// is held in memory for this request only and is never stored.
+async function submitSpeechAttempt(parentId, sessionId, { itemId, audio, mime, firstAttemptMs, attemptCount, hintUsed } = {}, deps = {}) {
+  const session = await getOwnedSession(parentId, sessionId);
+  if (session.status !== "active") throw httpError(409, "This session is finished.");
+  if (session.items[session.currentIndex]?.id !== itemId) throw httpError(409, "That is not the current activity.");
+  const heard = await (deps.transcribe ?? speechService.transcribe)(audio, mime);
+  const result = await submitAttempt(parentId, sessionId, {
+    itemId,
+    response: { mode: "speech", transcript: heard.transcript, confidence: heard.confidence ?? undefined, firstAttemptMs, attemptCount, hintUsed },
+  });
+  return { ...result, heard: scrubContactDetails(heard.transcript) };
+}
+
 // Ends a session early (the child stopped). Activities not reached get no stars.
 async function finishSession(parentId, sessionId) {
   const session = await getOwnedSession(parentId, sessionId);
@@ -358,6 +400,6 @@ async function deleteAllData(parentId) {
 
 module.exports = {
   createChild, updateChild, listChildren, getOwnedChild, deleteChild, exportChildData, deleteAllData, minutesPractisedToday,
-  startSession, getSession, submitAttempt, finishSession, getChildProgress,
+  startSession, getSession, submitAttempt, submitSpeechAttempt, speechLine, finishSession, getChildProgress,
   MAX_CHILDREN,
 };

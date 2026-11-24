@@ -53,7 +53,8 @@ requested by the supervisor after it was written. The SRS has not been updated f
 | Parent consent, parent PIN, optional permissions (all off by default), daily limit, data export and deletion | Done, tested (backend) |
 | Teacher role and review of de-identified attempts with judgments and an agreement rate | Done, tested (backend) |
 | Contact-detail scrubbing of transcripts before storage and teacher display | Done, tested |
-| Speech-to-text and text-to-speech for the tutor | Not started. The browser does speech for now; the InterviewAI Groq Whisper service (`/api/speech`) still exists but is untested with children. xAI is a candidate and is unverified |
+| Server-side speech: spoken answers to text and the tutor's voice (xAI or Groq adapters, cached voice lines, no audio stored) | Done and tested with mocked providers; **not tried against a real service**, and no provider has been verified for children's voices or data policy |
+| Child-speech accuracy and latency check (`backend/scripts/evalStt.js`) | Script ready; needs permitted sample recordings and an API key |
 | Raw audio retention | Not built. The permissions exist but no audio is stored |
 | Child, parent and teacher web screens | In progress by teammates; see [docs/TUTOR_API.md](docs/TUTOR_API.md) |
 | Removal of InterviewAI-only code | Not started (see [Legacy InterviewAI code](#legacy-interviewai-code)) |
@@ -199,6 +200,7 @@ starts the backend and the frontend; it needs the same Supabase settings.
 | `OPENROUTER_ZDR` | `true` asks for zero-data-retention endpoints only |
 | `TUTOR_LLM_TIMEOUT_MS` | Default 20000 (OpenRouter) or 90000 (local) |
 | `TUTOR_PIN_SECRET` | Signs the short-lived parent PIN tokens. Set a long random value in every deployment |
+| `TUTOR_STT_PROVIDER`, `TUTOR_TTS_PROVIDER`, `XAI_API_KEY`, `GROQ_API_KEY`, `TUTOR_TTS_VOICE` | Optional server-side speech (see [docs/TUTOR_API.md](docs/TUTOR_API.md)). Off unless a provider is chosen. The xAI speech-to-text returns no confidence, so Clarity is then left out of the score |
 
 Every model call is logged (provider, model, prompt version, tokens, duration, status; no prompts or
 replies) in the existing `ai_logs` table.
@@ -215,11 +217,13 @@ backend/src/
   services/tutorReportService.js     learner report
   services/tutorPrivacyService.js    consent, PIN, permissions, daily limit
   services/tutorReviewService.js     teacher review and judgments
+  services/tutorSpeechService.js     speech to text and tutor voice
   routes/tutor.js                    /api/tutor routes (see docs/TUTOR_API.md)
   data/tutor*.json                   rubric, word lists, topics, pictures
   prompts/tutor-lesson.md            versioned lesson prompt
 backend/scripts/tryLessons.js        live check of lesson generation
 backend/scripts/tryReport.js         live check of the learner report
+backend/scripts/evalStt.js           child-speech accuracy and latency check for choosing a provider
 backend/test/tutor-*.test.js         tutor tests
 supabase/migrations/                 database schema
 frontend/                            React + Vite app (still the InterviewAI interface)
@@ -244,8 +248,8 @@ documented in `backend/.env.example` and `docs/DUC_SETUP.md`.
 
 ## Known limitations
 
-- The screens are being built by teammates and there is no server-side speech integration yet, so the tutor cannot be
-  tried end to end by a child.
+- The screens are being built by teammates and the speech services have only been tested against mocks, so the tutor
+  has not yet been tried end to end by a child.
 - The consent text (`backend/src/data/tutorConsent.json`) is a draft that must be reviewed by the supervisor, the partner
   company and, where required, legal advice. It does not replace the written permission the pilot needs.
 - Pictures are emoji placeholders, and no audio is stored even if a parent turns the audio permissions on.

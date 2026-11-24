@@ -7,6 +7,7 @@ const lessons = require("../services/tutorLessonService");
 const reportService = require("../services/tutorReportService");
 const privacy = require("../services/tutorPrivacyService");
 const review = require("../services/tutorReviewService");
+const speech = require("../services/tutorSpeechService");
 const { httpError } = require("../utils/httpError");
 const topics = require("../data/tutorTopics.json").topics;
 
@@ -47,6 +48,8 @@ const teacherOnly = requireRole("teacher", "admin");
 const startLimit = rateLimit({ windowMs: 60 * 1000, max: 10 });
 const reportLimit = rateLimit({ windowMs: 60 * 1000, max: 5 });
 const pinLimit = rateLimit({ windowMs: 60 * 1000, max: 20 });
+const audioLimit = rateLimit({ windowMs: 60 * 1000, max: 60 });
+const voiceLimit = rateLimit({ windowMs: 60 * 1000, max: 120 });
 
 router.get("/topics", (req, res) => {
   res.json({ topics: lessons.topicIds.map((id) => ({ id, label: topics[id].label })) });
@@ -137,6 +140,33 @@ router.post("/sessions/:id/attempts", handle(async (req, res) => {
 
 router.post("/sessions/:id/finish", handle(async (req, res) => {
   res.json({ session: await tutor.finishSession(req.user.id, req.params.id) });
+}));
+
+// --- speech --------------------------------------------------------------------------------------
+
+// Which speech services are on. When one is off the browser falls back to its own speech.
+router.get("/speech/status", (req, res) => res.json(speech.status()));
+
+// A spoken answer: the body is the recording (audio/*); the rest is in the query. Consent is required because
+// the child's voice goes to a speech service. The audio is not stored.
+router.post("/sessions/:id/attempts/audio", consented, audioLimit,
+  express.raw({ type: "audio/*", limit: speech.MAX_AUDIO_BYTES }),
+  handle(async (req, res) => {
+    if (!req.is("audio/*") || !Buffer.isBuffer(req.body)) throw httpError(415, "Send the recording as audio.", "AUDIO_FORMAT");
+    const number = (v) => (v === undefined || v === "" ? undefined : Number(v));
+    res.json(await tutor.submitSpeechAttempt(req.user.id, req.params.id, {
+      itemId: req.query.itemId, audio: req.body, mime: req.get("content-type"),
+      firstAttemptMs: number(req.query.firstAttemptMs), attemptCount: number(req.query.attemptCount), hintUsed: req.query.hintUsed === "true",
+    }));
+  }));
+
+// The tutor's voice for one line of this session (see speechLine for the allowed lines). Returns audio bytes.
+router.get("/sessions/:id/speech", consented, voiceLimit, handle(async (req, res) => {
+  const { text, ageBand } = await tutor.speechLine(req.user.id, req.params.id, { line: req.query.line, itemId: req.query.itemId, stars: req.query.stars });
+  const voice = await speech.speak(text, { ageBand });
+  res.setHeader("Content-Type", voice.contentType);
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  res.send(voice.audio);
 }));
 
 // --- teacher review (role teacher or admin) -----------------------------------------------------
