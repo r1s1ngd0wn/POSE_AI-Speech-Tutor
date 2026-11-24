@@ -44,6 +44,8 @@ const CRITERION_WORDS = {
   participation: /join(ing)? in|particip/i,
 };
 
+// "1 lesson", "2 lessons"
+const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const round = (n, places = 2) => Math.round(n * 10 ** places) / 10 ** places;
 const mean = (list) => (list.length ? list.reduce((a, b) => a + b, 0) / list.length : null);
 const meanRounded = (list) => (list.length ? round(mean(list)) : null);
@@ -137,7 +139,7 @@ function templateNarrative(facts) {
   if (!facts.enoughData) {
     return {
       source: "template",
-      summary: `There is not enough practice yet for a full overview. {child} has completed ${facts.lessonsCompleted} lessons with ${facts.activitiesScored} scored activities; a report needs at least ${facts.needs.completedLessons} completed lessons and ${facts.needs.scoredActivities} scored activities.`,
+      summary: `There is not enough practice yet for a full overview. {child} has completed ${count(facts.lessonsCompleted, "lesson")} with ${count(facts.activitiesScored, "scored activity", "scored activities")}; a report needs at least ${count(facts.needs.completedLessons, "completed lesson")} and ${count(facts.needs.scoredActivities, "scored activity", "scored activities")}.`,
       strengths: [],
       focus: [],
       suggestions: ["Keep practising a little often. The overview will appear once there is enough to look at."],

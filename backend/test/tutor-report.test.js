@@ -71,6 +71,8 @@ test("too little practice gives an honest 'not enough yet' report and never call
   assert.equal(called, false);
   assert.equal(r.enoughData, false);
   assert.match(r.narrative.summary, /not enough practice yet/);
+  assert.match(r.narrative.summary, /completed 2 lessons with 10 scored activities/);
+  assert.match(r.narrative.summary, /at least 3 completed lessons and 10 scored activities/);
   assert.match(r.narrative.summary, /Mimi/);
   assert.deepEqual(r.narrative.strengths, []);
 });
@@ -198,4 +200,9 @@ test("a report is generated, stored for the parent, hidden from others and delet
   await assert.rejects(report.generateReport(b.id, c.id, { llm: null }), (e) => e.status === 404);
   await tutor.deleteChild(a.id, c.id);
   assert.equal(await store.tutorReports.get(c.id), undefined);
+});
+
+test("the not-enough-data wording is grammatical for one lesson", async () => {
+  const r = await report.buildReport({ child, progress: learner(), sessions: sessions.slice(0, 1), now: at(5) }, { llm: null });
+  assert.match(r.narrative.summary, /completed 1 lesson with 5 scored activities/);
 });
