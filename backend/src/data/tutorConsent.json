@@ -1,0 +1,36 @@
+{
+  "version": "pilot-2026-11-v1",
+  "status": "DRAFT. This wording must be reviewed by the supervisor, the partner company and, where required, legal advice before any child uses the pilot. It does not replace the written permission the SRS requires for the pilot.",
+  "points": [
+    {
+      "id": "what",
+      "en": "The app lets your child practise short spoken English activities. It scores answers with fixed rules and gives one to three stars.",
+      "vi": "Ứng dụng cho con bạn luyện nói tiếng Anh qua các hoạt động ngắn. Điểm được tính bằng quy tắc cố định và cho từ một đến ba sao."
+    },
+    {
+      "id": "profile",
+      "en": "We store a nickname, age, avatar, lesson results, words practised and progress. We do not ask for a real name, address, school or contact details.",
+      "vi": "Chúng tôi lưu biệt danh, tuổi, hình đại diện, kết quả bài học, các từ đã luyện và tiến bộ. Chúng tôi không hỏi tên thật, địa chỉ, trường học hay thông tin liên hệ."
+    },
+    {
+      "id": "audio",
+      "en": "Your child's voice is sent to a speech service only while your child is answering, to turn it into text. Raw audio is not stored by default.",
+      "vi": "Giọng nói của con chỉ được gửi tới dịch vụ nhận dạng giọng nói khi con đang trả lời, để chuyển thành văn bản. Âm thanh gốc không được lưu theo mặc định."
+    },
+    {
+      "id": "ai",
+      "en": "An AI model writes lesson content from a topic and a level. It never sees your child's nickname and never decides scores.",
+      "vi": "Mô hình AI soạn nội dung bài học từ chủ đề và mức độ. Nó không thấy biệt danh của con và không quyết định điểm."
+    },
+    {
+      "id": "optional",
+      "en": "Teacher review, keeping audio, and teacher listening to audio are separate choices that are OFF until you turn them on. You can turn them off at any time, and a teacher loses access immediately.",
+      "vi": "Giáo viên xem lại, lưu âm thanh và giáo viên nghe âm thanh là các lựa chọn riêng và đang TẮT cho đến khi bạn bật. Bạn có thể tắt bất cứ lúc nào và giáo viên mất quyền truy cập ngay."
+    },
+    {
+      "id": "rights",
+      "en": "You can export your child's data and delete it at any time. A parent PIN protects settings and progress.",
+      "vi": "Bạn có thể xuất và xóa dữ liệu của con bất cứ lúc nào. Mã PIN phụ huynh bảo vệ phần cài đặt và tiến bộ."
+    }
+  ]
+}

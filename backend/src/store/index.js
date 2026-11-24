@@ -13,4 +13,6 @@ module.exports = {
   tutorSessions: table("tutor_sessions", "id"),
   tutorProgress: table("tutor_progress", "child_id"),
   tutorReports: table("tutor_reports", "child_id"),
+  tutorParents: table("tutor_parents", "parent_id"),
+  tutorJudgments: table("tutor_judgments", "id"),
 };

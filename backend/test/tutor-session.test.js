@@ -159,13 +159,13 @@ test("a model lesson is stored with its provenance; the child's age band sets th
   assert.equal(stored.items[1].source, "ai");
 });
 
-test("HTTP: parent creates a child, plays a lesson and ends it; unauthenticated calls are refused", async (t) => {
+test("HTTP: consent, PIN, then a parent creates a child, plays a lesson and ends it", async (t) => {
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
   const base = `http://127.0.0.1:${server.address().port}/api`;
-  const call = async (path, method = "GET", body, token) => {
-    const response = await fetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const call = async (path, method = "GET", body, token, extra = {}) => {
+    const response = await fetch(`${base}${path}`, { method, headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra }, body: body === undefined ? undefined : JSON.stringify(body) });
     return { status: response.status, data: await response.json() };
   };
 
@@ -176,8 +176,23 @@ test("HTTP: parent creates a child, plays a lesson and ends it; unauthenticated 
   const topics = await call("/tutor/topics", "GET", undefined, token);
   assert.deepEqual(topics.data.topics.map((x) => x.id).sort(), ["animals", "colors", "food", "nature", "space"]);
 
-  const child = (await call("/tutor/children", "POST", { nickname: "Lily", ageBand: "A" }, token)).data.child;
-  assert.equal((await call("/tutor/children", "POST", { nickname: "", ageBand: "A" }, token)).status, 400);
+  // Nothing can be created before consent and a PIN.
+  const early = await call("/tutor/children", "POST", { nickname: "Lily", age: 6 }, token);
+  assert.equal(early.status, 403);
+  assert.equal(early.data.code, "CONSENT_REQUIRED");
+  const text = (await call("/tutor/consent", "GET", undefined, token)).data.consent;
+  assert.equal((await call("/tutor/consent", "POST", { version: text.version }, token)).status, 201);
+  assert.equal((await call("/tutor/children", "POST", { nickname: "Lily", age: 6 }, token)).data.code, "PIN_NOT_SET");
+  assert.equal((await call("/tutor/pin", "POST", { pin: "4821" }, token)).status, 201);
+  assert.equal((await call("/tutor/children", "POST", { nickname: "Lily", age: 6 }, token)).data.code, "PIN_REQUIRED");
+  const pinToken = (await call("/tutor/pin/verify", "POST", { pin: "4821" }, token)).data.token;
+  const pin = { "X-Parent-Pin-Token": pinToken };
+
+  const child = (await call("/tutor/children", "POST", { nickname: "Lily", age: 6, avatar: "owl" }, token, pin)).data.child;
+  assert.equal(child.ageBand, "A");
+  assert.equal(child.avatar, "owl");
+  assert.equal((await call("/tutor/children", "POST", { nickname: "", age: 6 }, token, pin)).status, 400);
+  assert.equal((await call("/tutor/children", "GET", undefined, token)).data.children.length, 1, "the child picker needs no PIN");
 
   const started = await call("/tutor/sessions", "POST", { childId: child.id, topicId: "colors" }, token);
   assert.equal(started.status, 201);
@@ -190,5 +205,8 @@ test("HTTP: parent creates a child, plays a lesson and ends it; unauthenticated 
 
   assert.equal((await call(`/tutor/sessions/${sessionId}/attempts`, "POST", { itemId: "i1", response: { mode: "abandoned" } }, token)).status, 409);
   assert.equal((await call(`/tutor/sessions/${sessionId}/finish`, "POST", {}, token)).data.session.status, "abandoned");
-  assert.equal((await call(`/tutor/children/${child.id}`, "DELETE", undefined, token)).data.sessionsDeleted, 1);
+
+  assert.equal((await call(`/tutor/children/${child.id}/progress`, "GET", undefined, token)).data.code, "PIN_REQUIRED");
+  assert.equal((await call(`/tutor/children/${child.id}/progress`, "GET", undefined, token, pin)).status, 200);
+  assert.equal((await call(`/tutor/children/${child.id}`, "DELETE", undefined, token, pin)).data.sessionsDeleted, 1);
 });

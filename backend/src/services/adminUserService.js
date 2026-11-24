@@ -33,7 +33,7 @@ function validateProfilePatch(patch) {
 function validateListQuery(query = {}) {
   const { q = '', role = '', status = 'all', sort = 'created-desc', page = 1 } = query;
   if (typeof q !== 'string' || q.trim().length > 100) throw httpError(400, 'search must be at most 100 characters', 'INVALID_USER_QUERY');
-  if (role && !['user', 'admin'].includes(role)) throw httpError(400, 'role must be user or admin', 'INVALID_USER_QUERY');
+  if (role && !['user', 'teacher', 'admin'].includes(role)) throw httpError(400, 'role must be user, teacher or admin', 'INVALID_USER_QUERY');
   if (!['all', 'active', 'inactive'].includes(status)) throw httpError(400, 'status must be all, active or inactive', 'INVALID_USER_QUERY');
   if (!['created-desc', 'name-asc'].includes(sort)) throw httpError(400, 'unsupported user sort', 'INVALID_USER_QUERY');
   const numericPage = Number(page);

@@ -13,9 +13,14 @@ const { httpError } = require("../utils/httpError");
 const lessons = require("./tutorLessonService");
 const progressService = require("./tutorProgressService");
 const reportService = require("./tutorReportService");
+const privacyService = require("./tutorPrivacyService");
+const reviewService = require("./tutorReviewService");
+const { scrubContactDetails } = require("../utils/scrub");
 const { scoreAttempt, rubricVersion } = require("./tutorScoringService");
 
 const MAX_CHILDREN = 5;
+const AVATARS = ["fox", "panda", "lion", "bunny", "owl", "frog", "bear", "cat"];
+const DEFAULT_AVATAR = "fox";
 const NICKNAME = /^[\p{L}][\p{L} '-]{0,19}$/u;
 const MESSAGES = {
   3: "Great job!",
@@ -26,15 +31,52 @@ const MESSAGES = {
 
 // --- child profiles ----------------------------------------------------------------------------
 
-async function createChild(parentId, { nickname, ageBand } = {}) {
-  const name = String(nickname ?? "").trim();
+const bandForAge = (age) => (age <= 7 ? "A" : "B");
+
+function cleanNickname(value) {
+  const name = String(value ?? "").trim();
   if (!NICKNAME.test(name)) throw httpError(400, "Nickname must be 1 to 20 letters (use a nickname, not a full name).");
-  if (ageBand !== "A" && ageBand !== "B") throw httpError(400, "ageBand must be A (ages 6-7) or B (ages 8-10).");
+  return name;
+}
+
+// The age (6 to 10) is what a parent enters; the age band is derived from it (FR-03). A bare ageBand is
+// still accepted for callers that have no age.
+function cleanAge({ age, ageBand }) {
+  if (age !== undefined && age !== null && age !== "") {
+    const n = Number(age);
+    if (!Number.isInteger(n) || n < 6 || n > 10) throw httpError(400, "Age must be a whole number from 6 to 10.");
+    return { age: n, ageBand: bandForAge(n) };
+  }
+  if (ageBand === "A" || ageBand === "B") return { age: null, ageBand };
+  throw httpError(400, "Age (6 to 10) is required.");
+}
+
+function cleanAvatar(value) {
+  if (value === undefined || value === null) return DEFAULT_AVATAR;
+  if (!AVATARS.includes(value)) throw httpError(400, `Avatar must be one of: ${AVATARS.join(", ")}`);
+  return value;
+}
+
+async function createChild(parentId, { nickname, age, ageBand, avatar } = {}) {
+  const name = cleanNickname(nickname);
+  const years = cleanAge({ age, ageBand });
+  const picture = cleanAvatar(avatar);
   const existing = await store.tutorChildren.valuesWhere("parentId", parentId);
   if (existing.length >= MAX_CHILDREN) throw httpError(409, `A parent account can have at most ${MAX_CHILDREN} child profiles.`);
-  const child = { id: newId("child"), parentId, nickname: name, ageBand, createdAt: new Date().toISOString() };
+  const child = { id: newId("child"), parentId, nickname: name, ...years, avatar: picture, createdAt: new Date().toISOString() };
   await store.tutorChildren.set(child.id, child);
   return child;
+}
+
+// Edits a profile. Changing the age re-derives the age band; lessons already started keep their band.
+async function updateChild(parentId, childId, patch = {}) {
+  const child = await getOwnedChild(parentId, childId);
+  const next = { ...child };
+  if (patch.nickname !== undefined) next.nickname = cleanNickname(patch.nickname);
+  if (patch.age !== undefined) Object.assign(next, cleanAge({ age: patch.age }));
+  if (patch.avatar !== undefined) next.avatar = cleanAvatar(patch.avatar);
+  await store.tutorChildren.set(child.id, next);
+  return next;
 }
 
 async function listChildren(parentId) {
@@ -52,7 +94,10 @@ async function getOwnedChild(parentId, childId) {
 async function deleteChild(parentId, childId) {
   await getOwnedChild(parentId, childId);
   const sessions = await store.tutorSessions.valuesWhere("childId", childId);
-  for (const session of sessions) await store.tutorSessions.delete(session.id);
+  for (const session of sessions) {
+    await reviewService.deleteForSession(session.id);
+    await store.tutorSessions.delete(session.id);
+  }
   await store.tutorChildren.delete(childId);
   await progressService.deleteProgress(childId);
   await reportService.deleteReport(childId);
@@ -108,6 +153,27 @@ function publicSession(session) {
 
 // --- sessions ----------------------------------------------------------------------------------
 
+// Minutes the child has practised today (in the pilot's time zone). An unfinished session counts up to its
+// last answer, so leaving a session open does not use up the allowance.
+async function minutesPractisedToday(childId, now = new Date().toISOString()) {
+  const today = progressService.dayNumber(now);
+  const sessions = (await store.tutorSessions.valuesWhere("childId", childId)).filter((x) => progressService.dayNumber(x.startedAt) === today);
+  const ms = sessions.reduce((sum, x) => {
+    const end = x.endedAt ?? x.attempts[x.attempts.length - 1]?.at ?? x.startedAt;
+    return sum + Math.max(0, new Date(end).getTime() - new Date(x.startedAt).getTime());
+  }, 0);
+  return ms / 60000;
+}
+
+// The parent's optional daily limit (FR-04): no new lesson once the limit is used up.
+async function assertUnderDailyLimit(parentId, childId) {
+  const { dailyLimitMinutes } = await privacyService.getParent(parentId);
+  if (!dailyLimitMinutes) return;
+  if ((await minutesPractisedToday(childId)) >= dailyLimitMinutes) {
+    throw httpError(403, "Today's practice time is used up. Come back tomorrow!", "DAILY_LIMIT_REACHED");
+  }
+}
+
 async function getOwnedSession(parentId, sessionId) {
   const session = await store.tutorSessions.get(sessionId);
   if (!session || session.parentId !== parentId) throw httpError(404, "session not found");
@@ -116,6 +182,7 @@ async function getOwnedSession(parentId, sessionId) {
 
 async function startSession(parentId, { childId, topicId } = {}, deps = {}) {
   const child = await getOwnedChild(parentId, childId);
+  await assertUnderDailyLimit(parentId, child.id);
   if (!lessons.topicIds.includes(topicId)) throw httpError(400, `Unknown topic: ${topicId}`);
   // The learner model chooses the difficulty level and the words to practise; the model only writes the lesson.
   const progress = await progressService.getProgress(child.id);
@@ -174,7 +241,8 @@ function cleanResponse(raw, item) {
     return clean;
   }
 
-  clean.transcript = String(raw.transcript ?? "").slice(0, 300);
+  // Contact details are removed before the text is scored or stored (FR-11).
+  clean.transcript = scrubContactDetails(String(raw.transcript ?? "").slice(0, 300));
   clean.confidence = number(raw.confidence, { min: 0, max: 1 });
   if (Array.isArray(raw.wordConfidences)) {
     clean.wordConfidences = raw.wordConfidences.slice(0, 20).flatMap((w) => {
@@ -253,8 +321,43 @@ async function finishSession(parentId, sessionId) {
   return publicSession(session);
 }
 
+// A parent's copy of everything stored about one child (FR-17). The answer key is left out: it is not
+// the child's data, and the export is for the parent to read.
+async function exportChildData(parentId, childId) {
+  const child = await getOwnedChild(parentId, childId);
+  const sessions = (await store.tutorSessions.valuesWhere("childId", child.id)).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+  const progress = progressService.viewOf(await progressService.getProgress(child.id));
+  const report = await store.tutorReports.get(child.id);
+  return {
+    exportedAt: new Date().toISOString(),
+    child: { nickname: child.nickname, age: child.age, avatar: child.avatar, ageBand: child.ageBand, createdAt: child.createdAt },
+    progress,
+    sessions: sessions.map((x) => ({
+      id: x.id, topic: x.topicLabel, status: x.status, level: x.level, startedAt: x.startedAt, endedAt: x.endedAt,
+      attempts: x.attempts.map((a) => {
+        const item = x.items.find((i) => i.id === a.itemId);
+        return {
+          prompt: item?.prompt, activityType: item?.activityType, at: a.at, responseMode: a.response.mode, transcript: a.response.transcript ?? null,
+          stars: a.result.stars, bands: a.result.criteria.filter((c) => c.band !== null).map(({ id, band }) => ({ id, band })),
+        };
+      }),
+    })),
+    report: report ? { generatedAt: report.generatedAt, narrative: report.narrative, disclaimer: report.disclaimer } : null,
+  };
+}
+
+// Deletes everything the tutor stores for this parent: profiles, sessions, progress, reports, teacher
+// judgments about their children's attempts, and the privacy settings including the PIN.
+async function deleteAllData(parentId) {
+  const children = await listChildren(parentId);
+  let sessionsDeleted = 0;
+  for (const child of children) sessionsDeleted += (await deleteChild(parentId, child.id)).sessionsDeleted;
+  await privacyService.deleteParent(parentId);
+  return { deleted: true, children: children.length, sessionsDeleted };
+}
+
 module.exports = {
-  createChild, listChildren, getOwnedChild, deleteChild,
+  createChild, updateChild, listChildren, getOwnedChild, deleteChild, exportChildData, deleteAllData, minutesPractisedToday,
   startSession, getSession, submitAttempt, finishSession, getChildProgress,
   MAX_CHILDREN,
 };
