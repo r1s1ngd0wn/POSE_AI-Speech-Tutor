@@ -46,13 +46,16 @@ requested by the supervisor after it was written. The SRS has not been updated f
 |---|---|
 | Rubric scoring (Clarity, Accuracy, Completeness, Participation; stars) | Done, tested |
 | Lesson generation by a language model, with code-side validation and vetted fallback lessons | Done, tested; measured once against a local model (see below) |
-| Child profiles and lesson sessions API (`/api/tutor`) | Done, tested |
-| Storage for child profiles and sessions (Postgres migration; memory mode for tests) | Done |
-| Speech-to-text and text-to-speech for the tutor | Not started. The InterviewAI Groq Whisper service (`/api/speech`) still exists but is not wired into the tutor. xAI is a candidate and is unverified |
-| Child-facing web screens | Not started |
-| Learner model: word mastery, adaptive difficulty, stickers, streaks | Not started |
-| Comprehensive learner report | Not started |
-| Parent PIN, consent flow, teacher review, roles for the tutor | Not started. Any signed-in account can currently act as a parent |
+| Child profiles (age, avatar) and lesson sessions API (`/api/tutor`) | Done, tested |
+| Storage (Postgres migrations; memory mode for tests) | Done |
+| Learner model: word mastery, adaptive difficulty, stickers, streaks | Done, tested |
+| Comprehensive learner report (code-computed facts, checked model narrative) | Done, tested |
+| Parent consent, parent PIN, optional permissions (all off by default), daily limit, data export and deletion | Done, tested (backend) |
+| Teacher role and review of de-identified attempts with judgments and an agreement rate | Done, tested (backend) |
+| Contact-detail scrubbing of transcripts before storage and teacher display | Done, tested |
+| Speech-to-text and text-to-speech for the tutor | Not started. The browser does speech for now; the InterviewAI Groq Whisper service (`/api/speech`) still exists but is untested with children. xAI is a candidate and is unverified |
+| Raw audio retention | Not built. The permissions exist but no audio is stored |
+| Child, parent and teacher web screens | In progress by teammates; see [docs/TUTOR_API.md](docs/TUTOR_API.md) |
 | Removal of InterviewAI-only code | Not started (see [Legacy InterviewAI code](#legacy-interviewai-code)) |
 
 ## How it works
@@ -114,30 +117,33 @@ session starts, not during a turn. This is one small run, not a general result. 
 
 `backend/src/services/tutorSessionService.js`.
 
-- A parent account owns up to 5 child profiles. A profile is a nickname and an age band: no real name,
-  no password.
+- A parent account owns up to 5 child profiles. A profile is a nickname, an age (6 to 10, from which the
+  age band is derived) and an avatar: no real name, no password.
+- The parent records consent (version and time) before a profile or lesson can be created. Teacher review,
+  audio retention and teacher audio review are separate choices that start **off**. A parent PIN (salted hash,
+  five wrong tries lock it for five minutes) protects profile changes, progress, reports and privacy
+  settings, and an optional daily practice limit stops new lessons once used up.
+- Contact details (emails, links, phone numbers) are removed from transcripts before they are stored or shown.
+- A teacher sees only de-identified attempts from parents who currently allow it, and loses access the moment a
+  parent turns it off. The parent can export a child's data and delete it at any time.
 - Starting a session stores a full lesson snapshot including the answer key and the rubric version, so
   any score can be reproduced. **The browser never receives the answer key.**
 - Attempts must be answered in order and are scored on the server. Only the transcript is stored,
   never audio. Inputs from the browser are bounded before scoring; note that timings and attempt
   counts are reported by the browser, which is acceptable for a supervised pilot but not tamper-proof.
-- Deleting a child profile deletes all of that child's sessions.
+- Deleting a child profile deletes all of that child's sessions, progress, report and teacher judgments.
 - The language model receives a topic, a level and practice words only, never anything that identifies
   a child.
 
 ### API
 
-All routes need a signed-in user.
+The full reference (endpoints, request and response shapes, the PIN flow, error codes and Supabase setup) is in
+[docs/TUTOR_API.md](docs/TUTOR_API.md). In short:
 
-| Method and path | Purpose |
-|---|---|
-| `GET /api/tutor/topics` | Topic menu |
-| `GET /api/tutor/children`, `POST /api/tutor/children` | List or create child profiles |
-| `DELETE /api/tutor/children/:id` | Delete a profile and its sessions |
-| `POST /api/tutor/sessions` | Start a lesson (`childId`, `topicId`); rate limited to 10 per minute |
-| `GET /api/tutor/sessions/:id` | Current state and the current activity |
-| `POST /api/tutor/sessions/:id/attempts` | Submit an attempt (`itemId` and a `response` with `mode` of `speech`, `picture` or `abandoned`) |
-| `POST /api/tutor/sessions/:id/finish` | End a session early |
+- **Parent:** record consent, set a PIN, create child profiles, change permissions, see progress and reports, export
+  or delete data. Profile changes, progress and privacy need the PIN.
+- **Child:** pick a topic, start a lesson, answer activities one at a time (speech or picture choice).
+- **Teacher:** review de-identified attempts from parents who allow it, and record whether they agree with the stars.
 
 ## Running locally
 
@@ -192,6 +198,7 @@ starts the backend and the frontend; it needs the same Supabase settings.
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | OpenRouter. Pin one exact model id. Requests ask not to route to providers that train on prompts; verify the chosen model's data policy before real children use it |
 | `OPENROUTER_ZDR` | `true` asks for zero-data-retention endpoints only |
 | `TUTOR_LLM_TIMEOUT_MS` | Default 20000 (OpenRouter) or 90000 (local) |
+| `TUTOR_PIN_SECRET` | Signs the short-lived parent PIN tokens. Set a long random value in every deployment |
 
 Every model call is logged (provider, model, prompt version, tokens, duration, status; no prompts or
 replies) in the existing `ai_logs` table.
@@ -204,10 +211,15 @@ backend/src/
   services/tutorLessonService.js     lesson generation and validation
   services/tutorLlm.js               local / OpenRouter client
   services/tutorSessionService.js    child profiles and sessions
-  routes/tutor.js                    /api/tutor routes
+  services/tutorProgressService.js   word mastery, levels, streaks, stickers
+  services/tutorReportService.js     learner report
+  services/tutorPrivacyService.js    consent, PIN, permissions, daily limit
+  services/tutorReviewService.js     teacher review and judgments
+  routes/tutor.js                    /api/tutor routes (see docs/TUTOR_API.md)
   data/tutor*.json                   rubric, word lists, topics, pictures
   prompts/tutor-lesson.md            versioned lesson prompt
 backend/scripts/tryLessons.js        live check of lesson generation
+backend/scripts/tryReport.js         live check of the learner report
 backend/test/tutor-*.test.js         tutor tests
 supabase/migrations/                 database schema
 frontend/                            React + Vite app (still the InterviewAI interface)
@@ -232,8 +244,11 @@ documented in `backend/.env.example` and `docs/DUC_SETUP.md`.
 
 ## Known limitations
 
-- No child-facing interface and no speech integration yet, so the tutor cannot be tried end to end by a
-  child.
+- The screens are being built by teammates and there is no server-side speech integration yet, so the tutor cannot be
+  tried end to end by a child.
+- The consent text (`backend/src/data/tutorConsent.json`) is a draft that must be reviewed by the supervisor, the partner
+  company and, where required, legal advice. It does not replace the written permission the pilot needs.
+- Pictures are emoji placeholders, and no audio is stored even if a parent turns the audio permissions on.
 - The rubric thresholds, word lists and topic vocabulary are drafts that need review by a teacher.
 - Whether a particular speech or language service is acceptable for children's data, and how well it
   recognises children's voices, has not been verified. This must be checked before any pilot with
