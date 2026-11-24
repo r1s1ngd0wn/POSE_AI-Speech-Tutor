@@ -3,7 +3,6 @@ services:
     build: ./backend
     volumes:
       - ./AI_USAGE.md:/app/AI_USAGE.md:ro
-      - scenario_data:/app/data
     ports:
       - "4000:4000"
     environment:
@@ -12,16 +11,23 @@ services:
       - CORS_ORIGIN=http://localhost:5173
       - TRUST_PROXY=1
       - DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL to the Supabase Postgres connection string}
-      - SCENARIO_DATA_FILE=/app/data/scenario-overrides.json
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-}}
       - SUPABASE_SECRET_KEY=${SUPABASE_SECRET_KEY:-}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
-      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-flash-latest}
-      # Uncomment for a demo deployment that should include the seeded test login.
-      # - SEED_TEST_ACCOUNT=true
+      - TUTOR_PIN_SECRET=${TUTOR_PIN_SECRET:?Set TUTOR_PIN_SECRET to a long random value}
+      # Lessons and reports: "local" needs a model server reachable from inside the container
+      # (use http://host.docker.internal:1234/v1, not localhost); "openrouter" needs the key and model.
+      - TUTOR_LLM_PROVIDER=${TUTOR_LLM_PROVIDER:-}
+      - LOCAL_LLM_URL=${LOCAL_LLM_URL:-}
+      - LOCAL_LLM_MODEL=${LOCAL_LLM_MODEL:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
+      # Server-side speech (optional).
+      - TUTOR_STT_PROVIDER=${TUTOR_STT_PROVIDER:-}
+      - TUTOR_TTS_PROVIDER=${TUTOR_TTS_PROVIDER:-}
+      - XAI_API_KEY=${XAI_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:4000/api/health"]
       interval: 10s
@@ -38,5 +44,3 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-volumes:
-  scenario_data:

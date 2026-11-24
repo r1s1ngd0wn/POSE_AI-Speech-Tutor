@@ -1,40 +1,35 @@
-// Account-level data rights: export everything held about a user, or erase it all.
+// Account-level data rights: export everything the tutor holds about a parent and their children, or erase it
+// all, together with the sign-in account itself. (Per-child export and deletion, and "delete all tutor data",
+// are also available separately in tutorSessionService.)
 const store = require("../store");
-const sessionService = require("./sessionService");
-const documentService = require("./documentService");
+const tutor = require("./tutorSessionService");
+const privacy = require("./tutorPrivacyService");
 const { toPublicUser, httpError } = require("./authService");
-const context = require('../context/requestContext');
-const { adminClient, memoryPreview } = require('../db/supabase');
-const aiRequestLog = require('./aiRequestLogService');
+const context = require("../context/requestContext");
+const { adminClient, memoryPreview } = require("../db/supabase");
+const aiRequestLog = require("./aiRequestLogService");
 
-async function exportData(userId) {
+async function currentUser(userId) {
   const user = memoryPreview() ? await store.users.get(userId) : context.getStore()?.user;
   if (!user) throw httpError(404, "user not found");
+  return user;
+}
 
-  const sessions = await Promise.all((await sessionService.listSessionsForUser(userId)).map(async (session) => ({
-    session,
-    feedback: (await store.feedbacks.get(session.id)) || null,
-    chat: (await store.sessionChats.get(session.id)) || [],
-    documents: process.env.STORE_BACKEND === "memory" ? [] : await documentService.exportDocuments(userId, session.id),
-  })));
-
-  const documents = process.env.STORE_BACKEND === "memory" ? [] : await documentService.exportUserDocuments(userId);
-  const scope = context.getStore();
-  const plans = scope?.db ? await require('./planService').createPlanService(scope.db).list(userId) : [];
+async function exportData(userId) {
+  const user = await currentUser(userId);
+  const children = [];
+  for (const child of await tutor.listChildren(userId)) children.push(await tutor.exportChildData(userId, child.id));
   const aiRequests = await aiRequestLog.listForUser(userId);
-  return { exportedAt: new Date().toISOString(), user: toPublicUser(user), sessions, documents, plans, aiRequests };
+  return { exportedAt: new Date().toISOString(), user: toPublicUser(user), privacy: await privacy.getPrivacy(userId), children, aiRequests };
 }
 
 async function deleteAccount(userId) {
-  const user = memoryPreview() ? await store.users.get(userId) : context.getStore()?.user;
-  if (!user) throw httpError(404, "user not found");
-
-  await sessionService.deleteAllSessionsForUser(userId);
-  if (process.env.STORE_BACKEND !== "memory") await documentService.deleteAllUserDocuments(userId);
+  const user = await currentUser(userId);
+  await tutor.deleteAllData(userId);
   if (!memoryPreview()) {
     await aiRequestLog.deleteForUser(userId);
     const { error } = await adminClient().auth.admin.deleteUser(userId);
-    if (error) throw httpError(503, 'could not delete authentication account');
+    if (error) throw httpError(503, "could not delete authentication account");
     return;
   }
   for (const [token, record] of await store.tokens.entries()) {

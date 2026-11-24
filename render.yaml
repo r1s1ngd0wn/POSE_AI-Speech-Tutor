@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: interviewai-backend
+    name: ai-speaking-tutor-backend
     runtime: node
     rootDir: backend
     buildCommand: npm ci --omit=dev
@@ -23,11 +23,11 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      - key: GEMINI_API_KEY
+      - key: TUTOR_PIN_SECRET
         sync: false
-      - key: GEMINI_MODEL
-        value: gemini-flash-latest
-      - key: EMBEDDING_PROVIDER
-        value: gemini
-      - key: GEMINI_EMBEDDING_MODEL
-        value: gemini-embedding-001
+      - key: TUTOR_LLM_PROVIDER
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        sync: false

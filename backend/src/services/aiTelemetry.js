@@ -49,7 +49,8 @@ function createRequestLog(meta, options) {
       const cancelled = error?.name === 'AbortError' && meta.signal?.aborted;
       const status = error ? error.code === 'invalid_json' ? 'invalid_json' : error.code === 'provider_blocked' ? 'refused'
         : (aborted && !cancelled ? 'timeout' : 'error') : details.status || 'ok';
-      if (!cancelled && meta.provider !== 'local' && meta.capability !== 'speech') {
+      // Speech and voice failures say nothing about the language model, so they do not change its health.
+      if (!cancelled && meta.provider !== 'local' && meta.capability !== 'speech' && meta.capability !== 'tts') {
         if (status === 'ok' || status === 'refused') health.recordSuccess();
         else health.recordFailure(error || { upstreamStatus: details.provider_status });
       }

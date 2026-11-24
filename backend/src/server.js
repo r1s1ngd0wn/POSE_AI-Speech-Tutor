@@ -4,13 +4,7 @@ const cors = require("cors");
 
 const authRoutes = require("./routes/auth");
 const userRoutes = require("./routes/users");
-const scenarioRoutes = require("./routes/scenarios");
-const sessionRoutes = require("./routes/sessions");
-const progressRoutes = require("./routes/progress");
-const documentRoutes = require("./routes/documents");
-const coachRoutes = require("./routes/coach");
 const { seedTestAccount } = require("./db/seed");
-const { purgeStaleSessions } = require("./services/sessionService");
 const { checkConnection } = require("./db/postgres");
 const { securityHeaders, rateLimit } = require("./middleware/security");
 const { randomUUID } = require('node:crypto');
@@ -31,32 +25,16 @@ app.use(express.json({ limit: "50kb", inflate: false }));
 
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 app.get('/api/health/ai', (req, res) => res.json(require('./services/aiHealth').status()));
-app.use('/api/plans', require('./routes/plans'));
 app.use('/api/admin', requireAuth, requireRole('admin'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/admin/users', require('./routes/adminUsers'));
-app.use('/api/admin/scenarios', require('./routes/adminScenarios'));
 
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 30 });
 app.use("/api/auth/login", authLimiter);
 app.use("/api/auth/register", authLimiter);
 
-// Each chat message can be a paid/quota-limited model call, so cap them per IP.
-app.post("/api/sessions/:id/chat", rateLimit({ windowMs: 60 * 1000, max: 20 }));
-app.post("/api/sessions/:id/chat/stream", rateLimit({ windowMs: 60 * 1000, max: 20 }));
-app.post("/api/documents", rateLimit({ windowMs: 60 * 1000, max: 10 }));
-app.post("/api/coach/chat", rateLimit({ windowMs: 60 * 1000, max: 20 }));
-app.post("/api/speech/transcribe", rateLimit({ windowMs: 60 * 60 * 1000, max: 120, message: "speech transcription limit reached, try again later" }));
-app.use('/api/coach/actions', rateLimit({ windowMs: 60 * 1000, max: 30 }));
-
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
-app.use("/api/scenarios", scenarioRoutes);
-app.use("/api/sessions", sessionRoutes);
-app.use("/api/documents", documentRoutes);
-app.use("/api/coach", coachRoutes);
-app.use("/api/speech", require("./routes/speech"));
-app.use("/api/progress", progressRoutes);
 app.use("/api/tutor", require("./routes/tutor"));
 
 app.use((req, res) => {
@@ -77,21 +55,18 @@ app.use((err, req, res, next) => {
 async function start() {
   if (process.env.STORE_BACKEND === "memory") {
     if (isProduction) throw new Error("memory store is only for local preview and tests");
-    console.warn("InterviewAI is running in temporary memory preview mode; data will not persist.");
+    console.warn("AI Speaking Tutor is running in temporary memory preview mode; data will not persist.");
   } else {
     await checkConnection();
   }
   // Persistent environments create test users explicitly through seed:auth.
   if (process.env.STORE_BACKEND === 'memory' && !isProduction) await seedTestAccount();
-  const purged = await purgeStaleSessions();
-  if (purged) console.log(`Removed ${purged} abandoned interview session(s).`);
-  setInterval(() => purgeStaleSessions().catch(console.error), 60 * 60 * 1000).unref();
   const port = process.env.PORT || 4000;
-  app.listen(port, () => console.log(`InterviewAI backend listening on http://localhost:${port}`));
+  app.listen(port, () => console.log(`AI Speaking Tutor backend listening on http://localhost:${port}`));
 }
 
 if (require.main === module) start().catch((err) => {
-  console.error("InterviewAI backend could not start:", err.message);
+  console.error("AI Speaking Tutor backend could not start:", err.message);
   process.exitCode = 1;
 });
 module.exports = { app, start };

@@ -7,13 +7,13 @@ model, scores the answer from one to three stars** using a versioned rubric.
 
 This is a course project (HCMUTE, group 03, supervised by PhD. Mai Anh Tho) built for a partner
 company that wants a cloud-based, scalable tutor. The repository started as **InterviewAI**, an adult
-interview-practice app, and is being converted. The tutor lives alongside the InterviewAI code it
-reuses (login, roles, logging, tests, Docker); parts that do not belong to the tutor are still here and
-are marked below.
+interview-practice app; its interview-specific code has been removed from the backend and the sign-in,
+roles, logging and deployment setup were kept (see [History](#history)).
 
-> **Status: work in progress.** The tutor's backend (scoring, lesson generation, child profiles and
-> lesson sessions) works and is tested. There is **no child-facing screen yet**; the React app in
-> `frontend/` is still the InterviewAI interface. See [What works today](#what-works-today).
+> **Status: work in progress.** The tutor's backend (scoring, AI-generated lessons, learner model, reports,
+> consent, PIN, teacher review, speech) works and is tested. The child, parent and teacher **screens** are being
+> built by teammates; the React app in `frontend/` is still the old interface until then. See
+> [What works today](#what-works-today).
 
 ## Scope
 
@@ -57,7 +57,7 @@ requested by the supervisor after it was written. The SRS has not been updated f
 | Child-speech accuracy and latency check (`backend/scripts/evalStt.js`) | Script ready; needs permitted sample recordings and an API key |
 | Raw audio retention | Not built. The permissions exist but no audio is stored |
 | Child, parent and teacher web screens | In progress by teammates; see [docs/TUTOR_API.md](docs/TUTOR_API.md) |
-| Removal of InterviewAI-only code | Not started (see [Legacy InterviewAI code](#legacy-interviewai-code)) |
+| Removal of InterviewAI-only code | Backend done. The `frontend/` folder still has the old pages until the new screens replace them (see [History](#history)) |
 
 ## How it works
 
@@ -148,53 +148,27 @@ The full reference (endpoints, request and response shapes, the PIN flow, error 
 
 ## Running locally
 
-Requires Node.js 22.5 or newer.
+Requires Node.js 22.5 or newer. Full instructions (Supabase, sign-in, deployment) are in [docs/SETUP.md](docs/SETUP.md).
 
 ```bash
 cd backend
-npm install
-npm test
-```
-
-`npm test` uses Node's test runner on in-memory tables, so it needs no database or API keys.
-
-To run the API without a database, use the in-memory preview (not for production, data is lost on
-restart):
-
-```bash
-cd backend
+npm ci
+npm test                          # in-memory tables and stubbed providers: no database or API keys
 cp .env.example .env
-STORE_BACKEND=memory npm run dev
+STORE_BACKEND=memory npm run dev  # temporary preview; seeds parent@tutor.test and teacher@tutor.test (password123)
 ```
 
 On Windows PowerShell, set the variable first: `$env:STORE_BACKEND="memory"; npm run dev`.
 
-Without a language model configured, lessons come from the vetted fallback set. To let a model write
-lessons, run a local server such as LM Studio and set in `backend/.env`:
-
-```
-TUTOR_LLM_PROVIDER=local
-LOCAL_LLM_URL=http://localhost:1234/v1
-LOCAL_LLM_MODEL=gemma-4
-```
-
-Then check how much of the model's output survives validation:
-
-```bash
-node scripts/tryLessons.js 2
-```
-
-For a persistent setup, create a Supabase project, copy `backend/.env.example` to `backend/.env`, set
-`DATABASE_URL` and the Supabase keys, and apply the files in `supabase/migrations/` in order. The
-tutor's tables are in `20261110000100_tutor_sessions.sql`. Sign-in setup (Supabase Auth, Google login,
-roles) is described in [docs/DUC_SETUP.md](docs/DUC_SETUP.md). Docker Compose (`docker-compose.yml`) still
-starts the backend and the frontend; it needs the same Supabase settings.
+Without a language model configured, lessons come from the vetted fallback set. To let a model write lessons, run a local
+server such as LM Studio and set `TUTOR_LLM_PROVIDER=local`, `LOCAL_LLM_URL` and `LOCAL_LLM_MODEL` in `backend/.env`, then
+check how much of the model's output survives validation with `npm run try:lessons`.
 
 ### Configuration for the tutor
 
 | Variable | Purpose |
 |---|---|
-| `TUTOR_LLM_PROVIDER` | `local` or `openrouter`. Unset means no model, so only vetted fallback lessons. The InterviewAI LLM settings never enable the tutor by themselves |
+| `TUTOR_LLM_PROVIDER` | `local` or `openrouter`. Unset means no model, so only vetted fallback lessons |
 | `LOCAL_LLM_URL`, `LOCAL_LLM_MODEL`, `LOCAL_LLM_API_KEY` | Local OpenAI-compatible server (LM Studio, Ollama, llama.cpp). Nothing leaves the machine |
 | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` | OpenRouter. Pin one exact model id. Requests ask not to route to providers that train on prompts; verify the chosen model's data policy before real children use it |
 | `OPENROUTER_ZDR` | `true` asks for zero-data-retention endpoints only |
@@ -209,6 +183,9 @@ replies) in the existing `ai_logs` table.
 
 ```
 backend/src/
+  routes/tutor.js                    /api/tutor routes (see docs/TUTOR_API.md)
+  routes/auth.js, users.js           sign-in, account export and deletion
+  routes/admin.js, adminUsers.js     administrator tools (AI usage and logs, users)
   services/tutorScoringService.js    rubric scoring
   services/tutorLessonService.js     lesson generation and validation
   services/tutorLlm.js               local / OpenRouter client
@@ -218,33 +195,23 @@ backend/src/
   services/tutorPrivacyService.js    consent, PIN, permissions, daily limit
   services/tutorReviewService.js     teacher review and judgments
   services/tutorSpeechService.js     speech to text and tutor voice
-  routes/tutor.js                    /api/tutor routes (see docs/TUTOR_API.md)
-  data/tutor*.json                   rubric, word lists, topics, pictures
-  prompts/tutor-lesson.md            versioned lesson prompt
-backend/scripts/tryLessons.js        live check of lesson generation
-backend/scripts/tryReport.js         live check of the learner report
-backend/scripts/evalStt.js           child-speech accuracy and latency check for choosing a provider
-backend/test/tutor-*.test.js         tutor tests
+  services/aiTelemetry.js ...        AI request logging and health
+  data/tutor*.json                   rubric, rules, word lists, topics, pictures, consent text
+  prompts/                           versioned lesson and report prompts
+backend/scripts/                     tryLessons, tryReport, evalStt, seedSupabaseUser, bootstrapAdmins
+backend/test/                        tests (tutor-*.test.js and platform tests)
 supabase/migrations/                 database schema
-frontend/                            React + Vite app (still the InterviewAI interface)
-docs/                                setup notes and decision records
+frontend/                            React + Vite app (being rebuilt for the tutor by teammates)
+docs/                                setup, API guide and decision records
 ```
 
-## Legacy InterviewAI code
+## History
 
-These parts of the repository belong to the app this project was converted from and are not part of the
-tutor. They still run and have tests, and will be removed or replaced as the tutor takes over:
-
-- Interview scenarios, scoring and feedback (`scoringService.js`, `sessionService.js`, `aiSimulator.js`,
-  `data/scenarios.json`, `data/rubric.json`) and the Dashboard, Interview and Feedback pages.
-- The CV and job-description pipeline: document upload, embeddings, retrieval, and the Coach and
-  post-interview chat (`documentService`, `ragService`, `chatService`, `coachService`, the Documents and
-  Coach pages, the pgvector migrations).
-- The Gemini and Groq integrations built for those features.
-
-What the tutor reuses: Supabase sign-in and roles, request logging, rate limiting and security headers,
-the key/value store layer, the test setup, and Docker. Configuration for the legacy features is
-documented in `backend/.env.example` and `docs/DUC_SETUP.md`.
+The repository started as InterviewAI, an adult interview-practice app. Its interview, CV-search, chat and coach code has been
+removed from the backend; the sign-in, roles, administrator tools, AI request logging, store layer and Docker setup were kept.
+The old migrations stay in `supabase/migrations/` as history ([docs/SETUP.md](docs/SETUP.md) says which ones a new project needs). The
+`frontend/` folder still contains the old interface until the new screens replace it, so its pages for interviews, documents,
+the coach and plans no longer have a backend. The team's AI-usage log (`AI_USAGE.md`) records the earlier work.
 
 ## Known limitations
 

@@ -1,13 +1,11 @@
 // Production data lives in Supabase Postgres. Tests use isolated memory tables.
+// users, usersByEmail and tokens only back the temporary memory-preview sign-in; Supabase Auth is used otherwise.
 const { table } = require("./table");
 
 module.exports = {
   users: table("interviewai_users", "id"),
   usersByEmail: table("interviewai_users_by_email", "email"),
   tokens: table("interviewai_tokens", "token"),
-  sessions: table("interviewai_sessions", "id"),
-  feedbacks: table("interviewai_feedbacks", "session_id"),
-  sessionChats: table("interviewai_session_chats", "session_id"),
   // AI Speaking Tutor
   tutorChildren: table("tutor_children", "id"),
   tutorSessions: table("tutor_sessions", "id"),

@@ -2,6 +2,8 @@
 
 Status: accepted. Owner: Khoa (structured output, scoring).
 
+> This decision carries over unchanged to the AI Speaking Tutor: `backend/src/services/tutorScoringService.js` scores in code from a versioned rubric, and the model only writes lesson content and narrative text that code then checks. The InterviewAI specifics below (interview answers, keywords, STAR structure) are historical.
+
 ## Context
 
 InterviewAI gives a 0-100 score on four rubric criteria (fluency, relevance, vocabulary range,
